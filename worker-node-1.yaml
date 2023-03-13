@@ -1,39 +1,51 @@
 bootcmd:
-  - sed -i 's/#DNS=/DNS=1.1.1.1 8.8.8.8/' /etc/systemd/resolved.conf && sed -i 's/#Domains=/Domains=k8s.local/' /etc/systemd/resolved.conf && systemctl restart systemd-resolved.service
+  - sed -i 's/#Domains=/Domains=k8s.local/' /etc/systemd/resolved.conf && systemctl restart systemd-resolved.service
   - curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
   - echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-growpart:
-  mode: auto
-  devices: [ "/" ]
-fqdn: "worker-node-1.k8s.local"
-prefer_fqdn_over_hostname: true
-timezone: "Etc/UTC"
-locale: "en_US.UTF-8"
+groups:
+  - k8sgroup: [root, k8s]
+users:
+  - name: k8s
+    gecos: K8S User
+
 package_update: true
 package_upgrade: true
+
+timezone: "Asia/Shanghai"
+locale: "zh_CN.UTF-8"
+
+growpart:
+  mode: auto
+  devices: ["/"]
+
 preserve_sources_list: true
+prefer_fqdn_over_hostname: true
 package_reboot_if_required: false
 manage_etc_hosts: false
+
+fqdn: "worker-node-1.k8s.local"
+
 packages:
   - containerd
-  - kubeadm=1.21.0-00
-  - kubelet=1.21.0-00
-  - kubectl=1.21.0-00
+  - kubeadm
+  - kubelet
+  - kubectl
   - apt-transport-https
   - ca-certificates
   - curl
   - jq
+
 write_files:
-  - path: /etc/modules-load.d/containerd.conf
+  - path: /etc/modules-load.d/k8s.conf
     content: |
       overlay
       br_netfilter
-  - path: /etc/sysctl.d/99-kubernetes-cri.conf
+  - path: /etc/sysctl.d/k8s.conf
     content: |
-      net.ipv4.ip_forward=1
-      net.bridge.bridge-nf-call-iptables=1
-      net.bridge.bridge-nf-call-ip6tables=1
-  - path: /etc/netplan/51-cloud-init.yaml
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+  - path: /etc/netplan/k8s.yaml
     content: |
       network:
         ethernets:
@@ -49,6 +61,7 @@ write_files:
       ::1         localhost ip6-localhost ip6-loopback
       ff02::1     ip6-allnodes
       ff02::2     ip6-allrouters
+
 runcmd:
   - mkdir /etc/containerd
   - containerd config default > /etc/containerd/config.toml
@@ -56,6 +69,7 @@ runcmd:
   - apt-mark hold kubelet kubeadm kubectl
   - swapoff -a
   - sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
 power_state:
   mode: reboot
   delay: now
